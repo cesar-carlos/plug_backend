@@ -96,6 +96,27 @@ export const app = new Elysia()
     }
   )
   .use(
+    cors({
+      origin: (origin: string | undefined) => {
+        // Permite requisições sem origin (Insomnia, curl, Postman)
+        if (!origin) return true;
+
+        // Se wildcard, permite tudo
+        if (env.CORS_ORIGIN === "*") return true;
+
+        // Lista de origens permitidas
+        const allowedOrigins = env.CORS_ORIGIN.split(",").map((o) =>
+          o.trim()
+        );
+        return allowedOrigins.includes(origin);
+      },
+      credentials: env.CORS_ORIGIN === "*" ? false : true,
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      allowedHeaders: true, // Permite todos os headers para compatibilidade com ferramentas REST
+      exposedHeaders: ["Content-Type", "Authorization"],
+    })
+  )
+  .use(
     swagger({
       path: "/documentation",
       documentation: {
@@ -132,15 +153,6 @@ export const app = new Elysia()
           },
         ],
       },
-    })
-  )
-  .use(
-    cors({
-      origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-      allowedHeaders: true, // Permite todos os headers para compatibilidade com ferramentas como Insomnia
-      exposedHeaders: ["Content-Type"],
     })
   )
   .use(authPlugin)

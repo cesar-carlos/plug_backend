@@ -1,10 +1,10 @@
-import { app } from './app';
-import { configureSocket } from './socket';
-import { logger } from './shared/utils/logger';
-import { env } from './shared/config/env';
-import { container } from './shared/di/container';
-import { runMigrations } from './infrastructure/database/migrations/migrate';
-import { Database } from './infrastructure/database/database';
+import { app } from "./app";
+import { configureSocket } from "./socket";
+import { logger } from "./shared/utils/logger";
+import { env } from "./shared/config/env";
+import { container } from "./shared/di/container";
+import { runMigrations } from "./infrastructure/database/migrations/migrate";
+import { Database } from "./infrastructure/database/database";
 
 const PORT = parseInt(env.PORT, 10);
 
@@ -12,9 +12,9 @@ const initializeDatabase = async (): Promise<void> => {
   try {
     // Run migrations (database connection will be created in Database singleton)
     await runMigrations();
-    logger.info('Database initialized and migrations applied');
+    logger.info("Database initialized and migrations applied");
   } catch (err) {
-    logger.error({ err }, 'Failed to initialize database');
+    logger.error({ err }, "Failed to initialize database");
     throw err;
   }
 };
@@ -23,12 +23,17 @@ const initializeAdminUser = async (): Promise<void> => {
   try {
     const defaultPassword = process.env.DEFAULT_ADMIN_PASSWORD;
     if (defaultPassword && container.userRepository.setUserPassword) {
-      const hashedPassword = await container.passwordHasher.hash(defaultPassword);
-      await container.userRepository.setUserPassword('admin', hashedPassword);
-      logger.info('Admin user initialized');
+      const hashedPassword = await container.passwordHasher.hash(
+        defaultPassword
+      );
+      await container.userRepository.setUserPassword("admin", hashedPassword);
+      logger.info("Admin user initialized");
     }
   } catch (err) {
-    logger.error({ err }, 'Failed to initialize admin user - continuing without default admin');
+    logger.error(
+      { err },
+      "Failed to initialize admin user - continuing without default admin"
+    );
   }
 };
 
@@ -36,25 +41,33 @@ try {
   await initializeDatabase();
   await initializeAdminUser();
 
-  const server = app.listen(PORT);
+  // Inicia o servidor (Bun escuta em 0.0.0.0 por padrão)
+  app.listen(PORT);
 
-  logger.info(
-    `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-  );
-
-  if (app.server) {
-    try {
-      configureSocket(app.server);
-      logger.info('Socket.io server configured successfully');
-    } catch (err) {
-      logger.error({ err }, 'Failed to configure Socket.io - continuing without WebSocket');
-    }
-  } else {
-    logger.error('Failed to get Bun server instance for Socket.io');
+  // Verifica se o servidor foi inicializado corretamente
+  if (!app.server) {
+    logger.fatal("Failed to start server - app.server is undefined");
+    process.exit(1);
   }
 
+  const hostname = app.server.hostname || "0.0.0.0";
+  const port = app.server.port || PORT;
+  logger.info(
+    `🦊 Elysia is running at http://${hostname}:${port} (accessible via http://localhost:${port})`
+  );
+
+  // Configura Socket.io usando o servidor HTTP do Bun
+  try {
+    configureSocket(app.server);
+    logger.info("Socket.io server configured successfully");
+  } catch (err) {
+    logger.error(
+      { err },
+      "Failed to configure Socket.io - continuing without WebSocket"
+    );
+  }
 } catch (err) {
-  logger.fatal({ err }, 'Failed to start server');
+  logger.fatal({ err }, "Failed to start server");
   process.exit(1);
 }
 
@@ -66,30 +79,39 @@ const gracefulShutdown = (signal: string): void => {
   }
   isShuttingDown = true;
 
-  logger.info({ signal }, 'Received shutdown signal, starting graceful shutdown');
+  logger.info(
+    { signal },
+    "Received shutdown signal, starting graceful shutdown"
+  );
 
   try {
     Database.getInstance().close();
   } catch (err) {
-    logger.error({ err }, 'Error closing database connection');
+    logger.error({ err }, "Error closing database connection");
   }
 
   setTimeout(() => {
-    logger.fatal('Forced shutdown after timeout');
+    logger.fatal("Forced shutdown after timeout");
     process.exit(1);
   }, 10000);
 
   process.exit(0);
 };
 
-process.on('uncaughtException', (err: Error): void => {
-  logger.fatal({ err, stack: err.stack }, 'Uncaught Exception - preventing crash');
-  gracefulShutdown('uncaughtException');
+process.on("uncaughtException", (err: Error): void => {
+  logger.fatal(
+    { err, stack: err.stack },
+    "Uncaught Exception - preventing crash"
+  );
+  gracefulShutdown("uncaughtException");
 });
 
-process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>): void => {
-  logger.error({ reason, promise }, 'Unhandled Rejection - preventing crash');
-});
+process.on(
+  "unhandledRejection",
+  (reason: unknown, promise: Promise<unknown>): void => {
+    logger.error({ reason, promise }, "Unhandled Rejection - preventing crash");
+  }
+);
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

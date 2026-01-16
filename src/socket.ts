@@ -21,7 +21,7 @@ export const configureSocket = (server: HttpServer<unknown>): Server => {
     const io = new Server(server as any, {
       cors: {
         origin: corsOrigin,
-        credentials: true,
+        credentials: env.CORS_ORIGIN === "*" ? false : true, // Consistente com configuração HTTP
       },
       maxHttpBufferSize: SOCKET_CONFIG.MAX_HTTP_BUFFER_SIZE,
       pingTimeout: SOCKET_CONFIG.PING_TIMEOUT,
