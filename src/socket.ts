@@ -18,6 +18,9 @@ export const configureSocket = (server: HttpServer<unknown>): Server => {
         ? "*"
         : env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
 
+    // Bun's HttpServer is compatible with Socket.io's expected server type
+    // Socket.io accepts any HTTP server-like object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const io = new Server(server as any, {
       cors: {
         origin: corsOrigin,

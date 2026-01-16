@@ -150,7 +150,7 @@ export class MigrationManager {
         name,
         filename,
         applied: !!appliedInfo,
-        appliedAt: appliedInfo?.appliedAt,
+        ...(appliedInfo?.appliedAt && { appliedAt: appliedInfo.appliedAt }),
       };
     });
 

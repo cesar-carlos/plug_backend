@@ -5,6 +5,7 @@ import type { RefreshTokenRepository } from '../../domain/repositories/refresh_t
 import type { User } from '../../domain/entities/user.entity';
 import { RefreshToken } from '../../domain/entities/refresh_token.entity';
 import { generateRefreshToken } from '../../shared/utils/token_generator';
+import { calculateTokenExpiration, calculateRefreshTokenExpirationDate } from '../../shared/utils/token_expiration';
 import { env } from '../../shared/config/env';
 
 export interface AuthServiceResult {
@@ -24,27 +25,7 @@ export class AuthService {
 
   private async createRefreshToken(userId: string): Promise<string> {
     const refreshTokenValue = generateRefreshToken();
-    const expiresIn = env.JWT_REFRESH_TOKEN_EXPIRES_IN;
-    
-    // Parse expires in (e.g., "7d" = 7 days)
-    let expiresAt: Date;
-    if (expiresIn.endsWith('d')) {
-      const days = parseInt(expiresIn.slice(0, -1), 10);
-      expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + days);
-    } else if (expiresIn.endsWith('h')) {
-      const hours = parseInt(expiresIn.slice(0, -1), 10);
-      expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + hours);
-    } else if (expiresIn.endsWith('m')) {
-      const minutes = parseInt(expiresIn.slice(0, -1), 10);
-      expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + minutes);
-    } else {
-      // Default to 7 days
-      expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-    }
+    const expiresAt = calculateRefreshTokenExpirationDate(env.JWT_REFRESH_TOKEN_EXPIRES_IN);
 
     const refreshToken = new RefreshToken(
       crypto.randomUUID(),
@@ -76,21 +57,11 @@ export class AuthService {
         };
       }
 
-      // Generate access token with expiration
-      const accessTokenExpiresIn = env.JWT_ACCESS_TOKEN_EXPIRES_IN;
-      let exp: number | undefined;
-      if (accessTokenExpiresIn.endsWith('m')) {
-        const minutes = parseInt(accessTokenExpiresIn.slice(0, -1), 10);
-        exp = Math.floor(Date.now() / 1000) + minutes * 60;
-      } else if (accessTokenExpiresIn.endsWith('h')) {
-        const hours = parseInt(accessTokenExpiresIn.slice(0, -1), 10);
-        exp = Math.floor(Date.now() / 1000) + hours * 60 * 60;
-      }
-
+      const exp = calculateTokenExpiration(env.JWT_ACCESS_TOKEN_EXPIRES_IN);
       const token = await jwtSign({
         username: result.user.username,
         role: result.user.role,
-        exp,
+        ...(exp !== undefined && { exp }),
       });
 
       // Create refresh token
@@ -125,21 +96,11 @@ export class AuthService {
         };
       }
 
-      // Generate access token with expiration
-      const accessTokenExpiresIn = env.JWT_ACCESS_TOKEN_EXPIRES_IN;
-      let exp: number | undefined;
-      if (accessTokenExpiresIn.endsWith('m')) {
-        const minutes = parseInt(accessTokenExpiresIn.slice(0, -1), 10);
-        exp = Math.floor(Date.now() / 1000) + minutes * 60;
-      } else if (accessTokenExpiresIn.endsWith('h')) {
-        const hours = parseInt(accessTokenExpiresIn.slice(0, -1), 10);
-        exp = Math.floor(Date.now() / 1000) + hours * 60 * 60;
-      }
-
+      const exp = calculateTokenExpiration(env.JWT_ACCESS_TOKEN_EXPIRES_IN);
       const token = await jwtSign({
         username: result.user.username,
         role: result.user.role,
-        exp,
+        ...(exp !== undefined && { exp }),
       });
 
       // Create refresh token
@@ -172,21 +133,11 @@ export class AuthService {
         };
       }
 
-      // Generate new access token
-      const accessTokenExpiresIn = env.JWT_ACCESS_TOKEN_EXPIRES_IN;
-      let exp: number | undefined;
-      if (accessTokenExpiresIn.endsWith('m')) {
-        const minutes = parseInt(accessTokenExpiresIn.slice(0, -1), 10);
-        exp = Math.floor(Date.now() / 1000) + minutes * 60;
-      } else if (accessTokenExpiresIn.endsWith('h')) {
-        const hours = parseInt(accessTokenExpiresIn.slice(0, -1), 10);
-        exp = Math.floor(Date.now() / 1000) + hours * 60 * 60;
-      }
-
+      const exp = calculateTokenExpiration(env.JWT_ACCESS_TOKEN_EXPIRES_IN);
       const token = await jwtSign({
         username: result.user.username,
         role: result.user.role,
-        exp,
+        ...(exp !== undefined && { exp }),
       });
 
       // Generate new refresh token (rotate)

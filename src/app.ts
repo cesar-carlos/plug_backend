@@ -7,16 +7,9 @@ import { env } from "./shared/config/env";
 import { container } from "./shared/di/container";
 import { HTTP_STATUS } from "./shared/constants/http_status";
 import { ERROR_CODES } from "./shared/constants/error_codes";
-import {
-  isCommonResourcePath,
-  isClientErrorMessage,
-  determineErrorCodeFromMessage,
-  determineErrorCodeFromErrorType,
-  isClientErrorStatus,
-  isValidationErrorStatus,
-  isClientErrorCode,
-  logError,
-} from "./shared/utils/error_handler_helpers";
+import { isCommonResourcePath, logError } from "./shared/utils/error_handler_helpers";
+import { ErrorMapper } from "./shared/error_handling/error_mapper";
+import { ErrorStatusAdjuster } from "./shared/error_handling/error_status_adjuster";
 
 export const app = new Elysia()
   .onError(
@@ -42,62 +35,42 @@ export const app = new Elysia()
       const currentStatus =
         typeof set.status === "number" ? set.status : undefined;
 
-      let errorCode: string;
-      let inferredStatus: number;
+      const errorResponse = ErrorMapper.map({
+        code,
+        error,
+        currentStatus,
+        isNotFound,
+      });
 
-      if (code && code !== ERROR_CODES.UNKNOWN) {
-        errorCode = typeof code === "string" ? code : String(code);
-        inferredStatus = HTTP_STATUS.INTERNAL_SERVER_ERROR;
-      } else if (currentStatus && isClientErrorStatus(currentStatus)) {
-        if (error instanceof Error && isClientErrorMessage(error.message)) {
-          errorCode = determineErrorCodeFromMessage(error.message);
-        } else {
-          errorCode = ERROR_CODES.CLIENT_ERROR;
-        }
-        inferredStatus = currentStatus;
-      } else if (error instanceof Error) {
-        const { code: determinedCode, status } =
-          determineErrorCodeFromErrorType(error);
-        errorCode = determinedCode;
-        inferredStatus = status;
-      } else {
-        errorCode = ERROR_CODES.UNKNOWN_ERROR;
-        inferredStatus = HTTP_STATUS.INTERNAL_SERVER_ERROR;
-      }
-
-      const statusCode =
-        currentStatus || (isNotFound ? HTTP_STATUS.NOT_FOUND : inferredStatus);
+      const finalStatus = ErrorStatusAdjuster.adjustStatus(
+        errorResponse,
+        currentStatus
+      );
 
       logError(
-        errorCode,
-        statusCode,
+        errorResponse.code,
+        finalStatus,
         error,
         pathname,
         request.method,
         isNotFound
       );
 
-      if (
-        isClientErrorCode(errorCode) &&
-        (!currentStatus || currentStatus >= HTTP_STATUS.INTERNAL_SERVER_ERROR)
-      ) {
-        set.status = HTTP_STATUS.BAD_REQUEST as typeof set.status;
-      } else if (!currentStatus) {
-        const finalStatus = isNotFound ? HTTP_STATUS.NOT_FOUND : inferredStatus;
-        set.status = finalStatus as typeof set.status;
+      if (!currentStatus) {
+        set.status = finalStatus;
       }
 
       return {
-        success: false,
-        code: errorCode,
-        message:
-          error instanceof Error ? error.message : "Internal Server Error",
+        success: errorResponse.success,
+        code: errorResponse.code,
+        message: errorResponse.message,
       };
     }
   )
   .use(
     cors({
-      origin: (origin: string | undefined) => {
+      origin: (request: Request) => {
+        const origin = request.headers.get("origin");
         // Permite requisições sem origin (Insomnia, curl, Postman)
         if (!origin) return true;
 
@@ -113,7 +86,7 @@ export const app = new Elysia()
       credentials: env.CORS_ORIGIN === "*" ? false : true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: true, // Permite todos os headers para compatibilidade com ferramentas REST
-      exposedHeaders: ["Content-Type", "Authorization"],
+      exposeHeaders: ["Content-Type", "Authorization"],
     })
   )
   .use(

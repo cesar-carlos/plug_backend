@@ -1,6 +1,7 @@
 import type { UserRepository } from "../../domain/repositories/user_repository.interface";
 import { User } from "../../domain/entities/user.entity";
 import { Database } from "../database/database";
+import { USER_ROLES } from "../../shared/constants/user_roles";
 
 export class SQLiteUserRepository implements UserRepository {
   private db = Database.getInstance().getConnection();
@@ -153,7 +154,7 @@ export class SQLiteUserRepository implements UserRepository {
       } else {
         // Create new user
         const id = crypto.randomUUID();
-        const role = "admin"; // Default role for new users created via this method
+        const role = USER_ROLES.ADMIN;
         this.insertUserStmt.run(id, username, hashedPassword, role);
       }
     } catch (err) {

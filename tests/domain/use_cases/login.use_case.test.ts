@@ -6,13 +6,25 @@ import type { PasswordHasher } from '../../../src/shared/utils/password_hasher.i
 
 class MockUserRepository implements UserRepository {
   private users: Map<string, User> = new Map();
+  private usersById: Map<string, User> = new Map();
 
   async findByUsername(username: string): Promise<User | null> {
     return this.users.get(username) || null;
   }
 
+  async findById(id: string): Promise<User | null> {
+    return this.usersById.get(id) || null;
+  }
+
+  async create(user: User): Promise<User> {
+    this.users.set(user.username, user);
+    this.usersById.set(user.id, user);
+    return user;
+  }
+
   setUser(user: User): void {
     this.users.set(user.username, user);
+    this.usersById.set(user.id, user);
   }
 }
 

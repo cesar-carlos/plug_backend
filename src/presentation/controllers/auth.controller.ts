@@ -2,8 +2,8 @@ import { Elysia, t } from "elysia";
 import { authPlugin } from "../../plugins/auth.plugin";
 import { AuthService } from "../../application/services/auth.service";
 import { logger } from "../../shared/utils/logger";
-import { Username } from "../../domain/value_objects/username.value_object";
-import { Password } from "../../domain/value_objects/password.value_object";
+import { ValidationMiddleware } from "../../shared/middleware/validation.middleware";
+import { HTTP_STATUS } from "../../shared/constants/http_status";
 import type {
   LoginRequest,
   LoginResponse,
@@ -62,26 +62,13 @@ export const createAuthController = (authService: AuthService) => {
         async ({ body, jwt, set }): Promise<RegisterResponse> => {
           const { username, password, role }: RegisterRequest = body;
 
-          try {
-            Username.create(username);
-          } catch (error) {
-            logger.warn(
-              { username, error: (error as Error).message },
-              "Invalid username format"
-            );
-            set.status = 400;
-            throw new Error((error as Error).message);
-          }
-
-          try {
-            Password.create(password);
-          } catch (error) {
-            logger.warn(
-              { error: (error as Error).message },
-              "Invalid password format"
-            );
-            set.status = 400;
-            throw new Error((error as Error).message);
+          const validationResult = ValidationMiddleware.validateCredentials(
+            username,
+            password
+          );
+          if (!validationResult.isValid) {
+            set.status = HTTP_STATUS.BAD_REQUEST;
+            throw new Error(validationResult.error || "Validation failed");
           }
 
           const result = await authService.register(
@@ -95,7 +82,7 @@ export const createAuthController = (authService: AuthService) => {
 
           if (!result.success) {
             logger.warn({ username }, "Registration attempt failed");
-            set.status = 400;
+            set.status = HTTP_STATUS.BAD_REQUEST;
             throw new Error(result.error || "Registration failed");
           }
 
@@ -107,8 +94,8 @@ export const createAuthController = (authService: AuthService) => {
           return {
             success: true,
             message: "User registered successfully",
-            token: result.token,
-            refreshToken: result.refreshToken,
+            ...(result.token && { token: result.token }),
+            ...(result.refreshToken && { refreshToken: result.refreshToken }),
           };
         },
         {
@@ -152,26 +139,13 @@ export const createAuthController = (authService: AuthService) => {
         async ({ body, jwt, set }): Promise<LoginResponse> => {
           const { username, password }: LoginRequest = body;
 
-          try {
-            Username.create(username);
-          } catch (error) {
-            logger.warn(
-              { username, error: (error as Error).message },
-              "Invalid username format"
-            );
-            set.status = 400;
-            throw new Error((error as Error).message);
-          }
-
-          try {
-            Password.create(password);
-          } catch (error) {
-            logger.warn(
-              { error: (error as Error).message },
-              "Invalid password format"
-            );
-            set.status = 400;
-            throw new Error((error as Error).message);
+          const validationResult = ValidationMiddleware.validateCredentials(
+            username,
+            password
+          );
+          if (!validationResult.isValid) {
+            set.status = HTTP_STATUS.BAD_REQUEST;
+            throw new Error(validationResult.error || "Validation failed");
           }
 
           const result = await authService.login(
@@ -184,7 +158,7 @@ export const createAuthController = (authService: AuthService) => {
 
           if (!result.success) {
             logger.warn({ username }, "Login attempt failed");
-            set.status = 401;
+            set.status = HTTP_STATUS.UNAUTHORIZED;
             throw new Error(result.error || "Invalid credentials");
           }
 
@@ -192,8 +166,8 @@ export const createAuthController = (authService: AuthService) => {
 
           return {
             success: true,
-            token: result.token,
-            refreshToken: result.refreshToken,
+            ...(result.token && { token: result.token }),
+            ...(result.refreshToken && { refreshToken: result.refreshToken }),
           };
         },
         {
@@ -238,7 +212,7 @@ export const createAuthController = (authService: AuthService) => {
 
           if (!refreshToken || typeof refreshToken !== "string") {
             logger.warn("Refresh token missing or invalid");
-            set.status = 400;
+            set.status = HTTP_STATUS.BAD_REQUEST;
             throw new Error("Refresh token is required");
           }
 
@@ -251,7 +225,7 @@ export const createAuthController = (authService: AuthService) => {
 
           if (!result.success) {
             logger.warn("Token refresh attempt failed");
-            set.status = 401;
+            set.status = HTTP_STATUS.UNAUTHORIZED;
             throw new Error(result.error || "Token refresh failed");
           }
 
@@ -259,8 +233,8 @@ export const createAuthController = (authService: AuthService) => {
 
           return {
             success: true,
-            token: result.token,
-            refreshToken: result.refreshToken,
+            ...(result.token && { token: result.token }),
+            ...(result.refreshToken && { refreshToken: result.refreshToken }),
           };
         },
         {
