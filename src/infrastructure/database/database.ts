@@ -1,25 +1,52 @@
 import { Database as SQLiteDatabase } from 'bun:sqlite';
 import { logger } from '../../shared/utils/logger';
 import { env } from '../../shared/config/env';
-import { mkdir } from 'fs/promises';
-import { dirname } from 'path';
+import { mkdirSync } from 'fs';
+import { dirname, resolve } from 'path';
+
+const DEFAULT_DB_PATH = './data/plug_backend.db';
+
+const SQLITE_PRAGMAS = {
+  FOREIGN_KEYS: 'PRAGMA foreign_keys = ON;',
+  JOURNAL_MODE_WAL: 'PRAGMA journal_mode = WAL;',
+  SYNCHRONOUS_NORMAL: 'PRAGMA synchronous = NORMAL;',
+} as const;
+
+const isDirectoryExistsError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    return error.message.includes('EEXIST');
+  }
+  const nodeError = error as NodeJS.ErrnoException;
+  return nodeError.code === 'EEXIST';
+};
+
+const ensureDirectoryExists = (dirPath: string): void => {
+  try {
+    mkdirSync(dirPath, { recursive: true });
+  } catch (error) {
+    if (!isDirectoryExistsError(error)) {
+      throw error;
+    }
+  }
+};
 
 export class Database {
   private static instance: Database | null = null;
   private db: SQLiteDatabase;
 
   private constructor() {
-    const dbPath = env.DATABASE_PATH || './data/plug_backend.db';
+    const dbPath = resolve(env.DATABASE_PATH || DEFAULT_DB_PATH);
     
     try {
-      // Ensure directory exists
       const dbDir = dirname(dbPath);
-      mkdir(dbDir, { recursive: true }).catch(() => {
-        // Directory might already exist, ignore error
-      });
+      ensureDirectoryExists(dbDir);
 
       this.db = new SQLiteDatabase(dbPath);
-      this.db.exec('PRAGMA foreign_keys = ON;');
+      
+      this.db.exec(SQLITE_PRAGMAS.FOREIGN_KEYS);
+      this.db.exec(SQLITE_PRAGMAS.JOURNAL_MODE_WAL);
+      this.db.exec(SQLITE_PRAGMAS.SYNCHRONOUS_NORMAL);
+      
       logger.info({ dbPath }, 'SQLite database connected');
     } catch (err) {
       logger.fatal({ err, dbPath }, 'Failed to connect to SQLite database');
