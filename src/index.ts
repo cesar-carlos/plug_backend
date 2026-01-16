@@ -41,8 +41,30 @@ try {
   await initializeDatabase();
   await initializeAdminUser();
 
-  // Inicia o servidor (Bun escuta em 0.0.0.0 por padrão)
-  app.listen(PORT);
+  // Configura Socket.io ANTES de iniciar o servidor
+  // Necessário para integrar corretamente com Bun usando bun-engine
+  let socketConfig;
+  try {
+    socketConfig = configureSocket();
+    logger.info("Socket.io server configured successfully");
+  } catch (err) {
+    logger.error(
+      { err },
+      "Failed to configure Socket.io - continuing without WebSocket"
+    );
+    socketConfig = undefined;
+  }
+
+  // Inicia o servidor Elysia com o engine do Socket.io
+  // O engine.handler() fornece os handlers de WebSocket necessários para o Bun
+  if (socketConfig) {
+    app.listen({
+      port: PORT,
+      ...socketConfig.engine.handler(),
+    });
+  } else {
+    app.listen(PORT);
+  }
 
   // Verifica se o servidor foi inicializado corretamente
   if (!app.server) {
@@ -55,16 +77,10 @@ try {
   logger.info(
     `🦊 Elysia is running at http://${hostname}:${port} (accessible via http://localhost:${port})`
   );
-
-  // Configura Socket.io usando o servidor HTTP do Bun
-  try {
-    configureSocket(app.server);
-    logger.info("Socket.io server configured successfully");
-  } catch (err) {
-    logger.error(
-      { err },
-      "Failed to configure Socket.io - continuing without WebSocket"
-    );
+  
+  // Armazena a configuração do socket no Container para Dependency Injection
+  if (socketConfig) {
+    container.socketConfig = socketConfig;
   }
 } catch (err) {
   logger.fatal({ err }, "Failed to start server");

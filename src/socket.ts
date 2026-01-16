@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { Server as HttpServer } from "bun";
+import { Server as BunEngine } from "@socket.io/bun-engine";
 import { compress, decompress } from "./shared/utils/compression";
 import { env } from "./shared/config/env";
 import { container } from "./shared/di/container";
@@ -11,25 +11,40 @@ import {
 } from "./shared/constants/socket_config";
 import { SocketLogger } from "./shared/utils/socket_logger";
 
-export const configureSocket = (server: HttpServer<unknown>): Server => {
+export interface SocketConfig {
+  io: Server;
+  engine: BunEngine;
+}
+
+export const configureSocket = (): SocketConfig => {
   try {
     const corsOrigin =
       env.CORS_ORIGIN === "*"
         ? "*"
         : env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
 
-    // Bun's HttpServer is compatible with Socket.io's expected server type
-    // Socket.io accepts any HTTP server-like object
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const io = new Server(server as any, {
+    // Cria o Socket.io server
+    const io = new Server({
       cors: {
         origin: corsOrigin,
-        credentials: env.CORS_ORIGIN === "*" ? false : true, // Consistente com configuração HTTP
+        credentials: env.CORS_ORIGIN === "*" ? false : true,
       },
       maxHttpBufferSize: SOCKET_CONFIG.MAX_HTTP_BUFFER_SIZE,
       pingTimeout: SOCKET_CONFIG.PING_TIMEOUT,
       pingInterval: SOCKET_CONFIG.PING_INTERVAL,
     });
+
+    // Cria o Bun Engine para integração com Bun
+    const engine = new BunEngine({
+      path: SOCKET_CONFIG.PATH,
+      cors: {
+        origin: corsOrigin,
+        credentials: env.CORS_ORIGIN === "*" ? false : true,
+      },
+    });
+
+    // Vincula o Socket.io ao engine do Bun
+    io.bind(engine);
 
     io.on(SOCKET_EVENTS.ERROR, (err: Error): void => {
       SocketLogger.logServerError(err);
@@ -131,7 +146,7 @@ export const configureSocket = (server: HttpServer<unknown>): Server => {
       container.chatHandler(socket);
     });
 
-    return io;
+    return { io, engine };
   } catch (err) {
     SocketLogger.logServerInitializationError(err);
     throw err;

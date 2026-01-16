@@ -7,6 +7,7 @@ import { env } from "./shared/config/env";
 import { container } from "./shared/di/container";
 import { HTTP_STATUS } from "./shared/constants/http_status";
 import { ERROR_CODES } from "./shared/constants/error_codes";
+import { SOCKET_CONFIG } from "./shared/constants/socket_config";
 import { isCommonResourcePath, logError } from "./shared/utils/error_handler_helpers";
 import { ErrorMapper } from "./shared/error_handling/error_mapper";
 import { ErrorStatusAdjuster } from "./shared/error_handling/error_status_adjuster";
@@ -18,10 +19,15 @@ export const app = new Elysia()
       error,
       set,
       request,
-    }): { success: boolean; code: string | number; message: string } => {
+    }): { success: boolean; code: string | number; message: string } | undefined => {
       const url = new URL(request.url);
       const isNotFound = code === ERROR_CODES.NOT_FOUND;
       const pathname = url.pathname;
+
+      // Ignorar erros de rotas do Socket.io - deixar o Socket.io processar
+      if (pathname.startsWith(SOCKET_CONFIG.PATH)) {
+        return undefined;
+      }
 
       if (isNotFound && isCommonResourcePath(pathname)) {
         set.status = HTTP_STATUS.NOT_FOUND;
@@ -130,6 +136,12 @@ export const app = new Elysia()
   )
   .use(authPlugin)
   .onRequest(({ request }): void => {
+    // Não logar requisições do Socket.io para reduzir poluição nos logs
+    const url = new URL(request.url);
+    if (url.pathname.startsWith(SOCKET_CONFIG.PATH)) {
+      return;
+    }
+    
     logger.info(
       {
         method: request.method,
@@ -140,6 +152,19 @@ export const app = new Elysia()
     );
   })
   .use(container.authController)
+  
+  // Rota para delegar requisições Socket.io para o Bun Engine
+  // O engine precisa processar todas as requisições /socket.io/* para funcionar corretamente
+  .all(`${SOCKET_CONFIG.PATH}*`, ({ request, server }) => {
+    const socketConfig = container.socketConfig;
+    if (!socketConfig) {
+      return new Response('Socket.io not configured', { status: 503 });
+    }
+    
+    // Delega a requisição para o engine do Socket.io
+    // O engine processa tanto HTTP polling quanto WebSocket upgrades
+    return socketConfig.engine.handleRequest(request, server);
+  })
 
   .get(
     "/",

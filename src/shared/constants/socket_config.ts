@@ -6,6 +6,7 @@ export const SOCKET_CONFIG = {
   MAX_HTTP_BUFFER_SIZE: 1e8, // 100MB
   PING_TIMEOUT: 60000, // 60 seconds
   PING_INTERVAL: 25000, // 25 seconds
+  PATH: "/socket.io/",
 } as const;
 
 /**

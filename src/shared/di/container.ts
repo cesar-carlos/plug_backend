@@ -9,6 +9,7 @@ import { AuthService } from "../../application/services/auth.service";
 import { ChatService } from "../../application/services/chat.service";
 import { createAuthController } from "../../presentation/controllers/auth.controller";
 import { createChatHandler } from "../../presentation/handlers/chat.handler";
+import type { SocketConfig } from "../../socket";
 
 export class Container {
   private _userRepository = new SQLiteUserRepository();
@@ -76,6 +77,14 @@ export class Container {
 
   get chatHandler() {
     return createChatHandler(this.chatService);
+  }
+
+  private _socketConfig: SocketConfig | undefined;
+  set socketConfig(config: SocketConfig) {
+    this._socketConfig = config;
+  }
+  get socketConfig(): SocketConfig | undefined {
+    return this._socketConfig;
   }
 }
 
